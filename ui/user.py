@@ -1,7 +1,7 @@
 from ui import Component
 import streamlit as st
-from biz.user import get_user_by_username, init_user
 from ui.common import set_user_info, get_user_info
+from models.core import User
 
 
 class UserInitForm(Component):
@@ -15,13 +15,23 @@ class UserInitForm(Component):
             password = st.text_input("Password", type="password")
             if st.form_submit_button("Submit"):
                 if (
-                    user := get_user_by_username(username)
-                ) is not None and not user.is_out_date() and password != user.password:
-                    st.error("User already exists")
+                    user := User.get_user_by_username(username)
+                ) is not None:
+                    if user.is_out_date():
+                        user.update_password(password)
+                        st.info(f"User {username} login")
+                        set_user_info(user._id, username)
+                        st.rerun()
+                    elif password == user.password:
+                        set_user_info(user._id, username)
+                        st.info("Login success")
+                        st.rerun()
+                    else:
+                        st.error("User already exists and wrong password")
                 else:
-                    init_user(username, password)
+                    user = User.init_user(username, password)
                     st.info(f"User {username} created")
-                    set_user_info(username)
+                    set_user_info(user._id, username)
                     st.rerun()
 
 

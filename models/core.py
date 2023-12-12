@@ -32,14 +32,35 @@ class User(Model):
             return True
         return False
 
+    def update_password(self, password):
+        self.password = password
+        self.save()
+
     @staticmethod
     def init_user(username, password):
         user = User(username=username, password=password)
         user.save()
+        return user
 
     @staticmethod
-    def get_user_by_username(username=None):
+    def get_user_by_username(username=None) -> "User":
         return User.get_or_none(username=username)
+
+    def get_user_by_ids(user_ids: List[int]) -> List["User"]:
+        return User.select().where(User._id.in_(user_ids))
+
+    def recent_games(self)-> list["Game"]:
+        user_game_infos = UserGameInfo.select().where(
+            UserGameInfo.user_id == self._id
+            and UserGameInfo.created_at
+            > datetime.datetime.now() - datetime.timedelta(days=1)
+        )
+        if len(user_game_infos) == 0:
+            return []
+        games = Game.select().where(
+            Game._id.in_([info.game_id for info in user_game_infos])
+        )
+        return games
 
 
 class UserGameInfo(Model):
@@ -60,9 +81,12 @@ class UserGameInfo(Model):
 
 @dataclass
 class GameData:
-    Records: List
-        
-class GameBoard(Model):
+    records: list | None = None
+    default_balance: int = 100
+    max_player: int = -1
+
+
+class Game(Model):
     _id = AutoField(primary_key=True, unique=True)
     name = CharField(unique=True, null=False)
     owner_id = IntegerField(null=False)
@@ -73,7 +97,7 @@ class GameBoard(Model):
 
     def save(self, *args, **kwargs):
         self.modify_at = datetime.datetime.now()
-        return super(GameBoard, self).save(*args, **kwargs)
+        return super(Game, self).save(*args, **kwargs)
 
     @property
     def data(self):
@@ -83,15 +107,13 @@ class GameBoard(Model):
     class Meta:
         database = mysql_db
 
-
-
     @staticmethod
-    def create_game(name, owner_id, token=None):
-        game = GameBoard(
+    def create_game(name, owner_id, token=None, **kwargs):
+        game = Game(
             name=name,
             owner_id=owner_id,
             token=token,
-            game_data=json.dumps(asdict(GameData(Records=[])))
+            game_data=json.dumps(asdict(GameData(**kwargs))),
         )
         game.save()
         return game
@@ -103,14 +125,16 @@ class GameBoard(Model):
             return True
         return False
 
-    def user_join_game(self, user_id: int, balance=0):
+    def user_join_game(self, user_id: int):
         if self.is_expired():
             raise ModelException("game is expired")
 
         user_game_info = UserGameInfo.get_or_none(user_id=user_id, game_id=self._id)
         if user_game_info is None:
             user_game_info = UserGameInfo(
-                user_id=user_id, game_id=self._id, balance=balance
+                user_id=user_id,
+                game_id=self._id,
+                balance=self.data.default_balance,
             )
             user_game_info.save()
         return user_game_info
@@ -133,11 +157,32 @@ class GameBoard(Model):
             to_user_game_info.save()
             return from_user_game_info, to_user_game_info
 
+    def balance_modify(self, user_id: int, amount: int):
+        with mysql_db.atomic():
+            user_game_info = UserGameInfo.get_or_none(user_id=user_id, game_id=self._id)
+            if user_game_info is None:
+                raise ModelException("user not join game")
+            user_game_info.balance += amount
+            user_game_info.save()
+            return user_game_info
+
+    @staticmethod
+    def get_game_by_name(name) -> "Game":
+        return Game.get_or_none(name=name)
+
+    def ger_user_game_infos(self) -> List[UserGameInfo]:
+        return [
+            user_game_info
+            for user_game_info in UserGameInfo.select().where(
+                UserGameInfo.game_id == self._id
+            )
+        ]
+
 
 # if tables not exist , create
 if not mysql_db.table_exists("user"):
     mysql_db.create_tables([User])
 if not mysql_db.table_exists("game"):
-    mysql_db.create_tables([GameBoard])
+    mysql_db.create_tables([Game])
 if not mysql_db.table_exists("user_game_info"):
     mysql_db.create_tables([UserGameInfo])

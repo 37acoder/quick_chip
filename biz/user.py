@@ -1,4 +1,4 @@
-from models.core import User, GameBoard, mysql_db
+from models.core import User, Game, mysql_db
 
 
 if __name__ == "__main__":
@@ -9,7 +9,7 @@ if __name__ == "__main__":
     # print(get_user_by_username())
     user = User.get_user_by_username("user")
     admin = User.get_user_by_username("admin")
-    game = GameBoard.create_game("test", admin._id)
+    game = Game.create_game("test", admin._id)
     game.user_join_game(user._id, 200)
     game.user_join_game(admin._id, 200)
 

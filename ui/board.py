@@ -1,7 +1,7 @@
 import streamlit as st
 from ui import Component
 from rule.rule import GameBoard
-
+from ui.common import get_user_info, get_game_info
 
 class Board(Component):
     def __init__(self, session_key: str, game: GameBoard) -> None:
@@ -9,62 +9,61 @@ class Board(Component):
         self.game = game
 
     def render_ranking_table(self) -> None:
-        st.write("Ranking")
+        st.write(f"Game {self.game.game_model.name} Ranking Table, {self.game.owner.username} is owner")
+        if self.game.owner._id == get_user_info().user_id:
+            st.write("You are owner")
+            if st.toggle("show token"):
+                st.write(self.game.game_model.token)
+        
+        player_infos = [
+            {
+                "Name": name,
+                "Balance": info.balance,
+            }
+            for name, info in self.game.player_info_map_by_name.items()
+        ]
+
         player_sorted_by_deposit = sorted(
-            self.game.all_player_including_dealder,
-            key=lambda player: player.deposit,
+            player_infos,
+            key=lambda player: player["Balance"],
             reverse=True,
         )
         self.render_player_deposit_table(player_sorted_by_deposit)
 
-    def render_player_deposit_table(self, players=None) -> None:
-        if players is None:
-            players = self.game.all_player_including_dealder
-
-        def on_player_deposit_table_change(*args, **kwargs):
-            event = st.session_state[
-                f"{self.session_key}.player_deposit_table_callback"
-            ]
-            for num, value in event["edited_rows"].items():
-                player = players[int(num)]
-                player.deposit = value["Modify"]
-
+    def render_player_deposit_table(self, player_infos) -> None:
         st.data_editor(
-            [
-                {
-                    "Name": player.name,
-                    "Balance": player.deposit,
-                    "Modify": player.deposit,
-                }
-                for player in players
-            ],
+            player_infos,
             column_config={
                 "Balance": st.column_config.ProgressColumn(
                     "Balance",
                     format="$%f",
-                    max_value=max([player.deposit for player in players]),
-                    min_value=min([player.deposit for player in players]),
+                    max_value=100 if len(player_infos) == 0 else max([infos["Balance"] for infos in player_infos]),
+                    min_value=0,
                 ),
-                "Modify": st.column_config.NumberColumn(),
             },
             use_container_width=True,
             key=f"{self.session_key}.player_deposit_table_callback",
-            on_change=on_player_deposit_table_change,
         )
 
     def render_transfer_form(self) -> None:
         st.write("Transfer")
-        from_player_name = st.selectbox(
+        
+        user_id = get_user_info().user_id
+        self_index = next((i for i, player in enumerate(self.game.players) if player.user_model._id == user_id), 0)
+        is_owner = self.game.game_model.owner_id == user_id
+        from_player= st.selectbox(
             "From",
-            [player.name for player in self.game.all_player_including_dealder],
+            self.game.players,
+            format_func=lambda player: player.name,
+            index=self_index,
+            disabled=not is_owner,
         )
-        to_player_name = st.selectbox(
+        to_player= st.selectbox(
             "To",
-            [player.name for player in self.game.all_player_including_dealder],
+            self.game.players,
+            format_func=lambda player: player.name,
         )
         amount = st.number_input("Amount", min_value=0, value=0)
-        from_player = self.game.players_map_by_name[from_player_name]
-        to_player = self.game.players_map_by_name[to_player_name]
 
         def on_transfer():
             self.game.transfer(from_player, to_player, amount)
