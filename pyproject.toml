@@ -7,9 +7,12 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = ">=3.9,<3.9.7 || >3.9.7,<4.0"
 streamlit = "^1.29.0"
 watchdog = "^3.0.0"
+peewee = "^3.17.0"
+pymysql = "^1.1.0"
+dacite = "^1.8.1"
 
 
 [build-system]

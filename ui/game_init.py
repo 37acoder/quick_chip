@@ -1,6 +1,6 @@
 from ui import Component
 import streamlit as st
-from rule.rule import Game, Player
+from rule.rule import GameBoard, Player
 
 
 class InitGameForm(Component):
@@ -26,7 +26,7 @@ class InitGameForm(Component):
             st.info("Init success")
 
     def on_init(self, player_init_data: list[dict]) -> None:
-        game = Game(
+        game = GameBoard(
             [Player(player["name"], player["deposit"]) for player in player_init_data]
         )
         self.reset_callback(game)

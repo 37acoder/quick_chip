@@ -1,10 +1,10 @@
 import streamlit as st
 from ui import Component
-from rule.rule import Game
+from rule.rule import GameBoard
 
 
 class Board(Component):
-    def __init__(self, session_key: str, game: Game) -> None:
+    def __init__(self, session_key: str, game: GameBoard) -> None:
         super().__init__(session_key)
         self.game = game
 

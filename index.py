@@ -1,25 +1,29 @@
 from ui.board import Board
 from ui.game_init import InitGameForm
 import streamlit as st
+from models.core import GameBoard
+
+# with st.sidebar:
+#     InitGameForm(
+#         "sidebar_init_game_form", lambda game: st.session_state.update({"game": game})
+#     ).render()
+
+# if "game" not in st.session_state:
+#     st.stop()
 
 
-with st.sidebar:
-    InitGameForm(
-        "sidebar_init_game_form", lambda game: st.session_state.update({"game": game})
-    ).render()
+# board = Board("board", st.session_state.game)
 
-if "game" not in st.session_state:
-    st.stop()
+# board.render_ranking_table()
 
+# st.divider()
 
-board = Board("board", st.session_state.game)
+# board.render_transfer_form()
 
-board.render_ranking_table()
+# st.divider()
+# with st.expander("Records"):
+#     board.render_records_table()
 
-st.divider()
+from ui.user import UserInfo
 
-board.render_transfer_form()
-
-st.divider()
-with st.expander("Records"):
-    board.render_records_table()
+UserInfo("user_info")

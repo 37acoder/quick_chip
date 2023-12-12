@@ -1,14 +1,26 @@
 from abc import abstractmethod
 from datetime import datetime
+from models.core import User, GameBoard, UserGameInfo
+
 
 class Player:
-    def __init__(self, name: str, deposit: int = 0) -> None:
-        self.name = name
-        self.deposit = deposit
+    def __init__(
+        self, user: User, user_game_info: UserGameInfo, name: str, deposit: int = 0
+    ) -> None:
+        self.user_model = user
+        self.user_game_info_model = user_game_info
+
+    @property
+    def name(self) -> str:
+        return self.user_model.username
+
+    @property
+    def deposit(self):
+        return self.user_game_info_model.balance
 
 
 class Record:
-    def __init__(self, t:datetime = None) -> None:
+    def __init__(self, t: datetime = None) -> None:
         self.time = t or datetime.now()
 
     @abstractmethod
@@ -30,17 +42,17 @@ class TransferRecord(Record):
         return f"{self.from_player.name} pay {self.to_player.name} {self.amount}, balance {self.from_player.deposit}, {self.to_player.deposit}"
 
 
-class Game:
-    def __init__(self, players: list[Player], dealer: Player = None) -> None:
+class GameBoard:
+    def __init__(self, players: list[Player], owner: Player = None) -> None:
         self.players = players
-        self.dealer = dealer or Player("Dealer")
-
-        self.players_map_by_name = {player.name: player for player in self.all_player_including_dealder}
+        self.players_map_by_name = {
+            player.name: player for player in self.all_player_including_dealder
+        }
         self.records = []
 
     @property
     def all_player_including_dealder(self) -> list[Player]:
-        return [self.dealer] + self.players 
+        return [self.dealer] + self.players
 
     @property
     def player_number(self) -> int:
