@@ -13,5 +13,5 @@ if __name__ == "__main__":
     game.user_join_game(user._id, 200)
     game.user_join_game(admin._id, 200)
 
-    game.balance_trancefer(user._id, admin._id, 100)
+    game.balance_transfer(user._id, admin._id, 100)
     print(game)

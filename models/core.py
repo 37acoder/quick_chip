@@ -1,6 +1,7 @@
 from dataclasses import dataclass, asdict
 import datetime
 import json
+import random
 from typing import List
 import dacite
 from peewee import Model, CharField, DateTimeField, IntegerField, TextField, AutoField
@@ -49,7 +50,7 @@ class User(Model):
     def get_user_by_ids(user_ids: List[int]) -> List["User"]:
         return User.select().where(User._id.in_(user_ids))
 
-    def recent_games(self)-> list["Game"]:
+    def recent_games(self) -> list["Game"]:
         user_game_infos = UserGameInfo.select().where(
             UserGameInfo.user_id == self._id
             and UserGameInfo.created_at
@@ -139,23 +140,30 @@ class Game(Model):
             user_game_info.save()
         return user_game_info
 
-    def balance_trancefer(self, from_user_id: int, to_user_id: int, amount: int):
+    def balance_transfer(self, from_user_id: int, to_user_id: int, amount: int):
         with mysql_db.atomic():
-            from_user_game_info = UserGameInfo.get_or_none(
-                user_id=from_user_id, game_id=self._id
-            )
-            to_user_game_info = UserGameInfo.get_or_none(
-                user_id=to_user_id, game_id=self._id
-            )
-            if from_user_game_info is None or to_user_game_info is None:
-                raise ModelException("user not join game")
-            if from_user_game_info.balance < amount:
-                raise ModelException("user balance not enough")
-            from_user_game_info.balance -= amount
+            all_user_game_info = self.ger_user_game_infos()
+            from_user_game_info = None
+            to_user_game_info = None
+            for user_game_info in all_user_game_info:
+                if user_game_info.user_id == from_user_id:
+                    from_user_game_info = user_game_info
+                if user_game_info.user_id == to_user_id:
+                    to_user_game_info = user_game_info
+
+            if from_user_id != 1:  # god
+                if from_user_game_info is None or to_user_game_info is None:
+                    raise ModelException("user not join game")
+                from_user_game_info.balance -= amount
+                from_user_game_info.save()
+            
             to_user_game_info.balance += amount
-            from_user_game_info.save()
             to_user_game_info.save()
-            return from_user_game_info, to_user_game_info
+            all_balance = {info.user_id: info.balance for info in all_user_game_info}
+            TransferRecord.create_transfer_record(
+                self._id, from_user_id, to_user_id, amount, all_balance
+            )
+            
 
     def balance_modify(self, user_id: int, amount: int):
         with mysql_db.atomic():
@@ -178,11 +186,61 @@ class Game(Model):
             )
         ]
 
+    def get_all_records(self) -> List["TransferRecord"]:
+        return (
+            TransferRecord.select()
+            .where(TransferRecord.game_id == self._id)
+            .order_by(TransferRecord.time.desc())
+        )
+
+
+class TransferRecord(Model):
+    _id = AutoField(primary_key=True, unique=True)
+    game_id = IntegerField(null=False)
+    time = DateTimeField(default=datetime.datetime.now)
+    from_user_id = IntegerField(null=True)
+    to_user_id = IntegerField(null=False)
+    amount = IntegerField(null=False)
+    all_balance = TextField()
+
+    class Meta:
+        database = mysql_db
+
+    @staticmethod
+    def create_transfer_record(
+        game_id: int,
+        from_user_id: int,
+        to_user_id: int,
+        amount: int,
+        all_balance: dict[int, int],
+    ):
+        record = TransferRecord(
+            game_id=game_id,
+            from_user_id=from_user_id,
+            to_user_id=to_user_id,
+            amount=amount,
+            all_balance=json.dumps(all_balance),
+        )
+        record.save()
+        return record
+
+    @property
+    def balance_data(self):
+        balances = json.loads(self.all_balance)
+        new_balances = {}
+        for user_id in balances:
+            new_balances[int(user_id)] = balances[user_id]
+        return new_balances
+
 
 # if tables not exist , create
 if not mysql_db.table_exists("user"):
     mysql_db.create_tables([User])
+    god = User(username="god", password=str(random.randint(100000, 999999)))
+    god.save()
 if not mysql_db.table_exists("game"):
     mysql_db.create_tables([Game])
 if not mysql_db.table_exists("user_game_info"):
     mysql_db.create_tables([UserGameInfo])
+if not mysql_db.table_exists("transfer_record"):
+    mysql_db.create_tables([TransferRecord])

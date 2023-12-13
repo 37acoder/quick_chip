@@ -2,7 +2,6 @@ from ui import Component
 import streamlit as st
 from rule.rule import GameBoard, Player
 from ui.common import get_user_info, set_game_info, get_game_info
-from models.core import Game, User
 
 
 class InitGameForm(Component):
@@ -11,9 +10,6 @@ class InitGameForm(Component):
 
     def render(self) -> None:
         game_info = get_game_info()
-        if game_info is not None:
-            st.write(f"Game: {game_info.game_name}")
-            st.write(f"Game ID: {game_info.game_id}")
         with st.expander("Create or join Game", expanded=game_info is None):
             op = st.selectbox("Create/Join", ["Create", "Join"])
             if op == "Create":
@@ -28,14 +24,14 @@ class InitGameForm(Component):
                 )
             elif op == "Join":
                 user_id = get_user_info().user_id
-                user = User.get_by_id(user_id)
+                recent_games = Player.get_related_game_by_user_id(user_id)
 
                 recent = st.selectbox(
                     "recent games",
-                    options=user.recent_games(),
+                    options=recent_games or [],
                     format_func=lambda game: game.name,
                 )
-                game_name = st.text_input("Game Name", value=recent.name)
+                game_name = st.text_input("Game Name", value= "" if recent is None else recent.name)
                 game_token = st.text_input("Game Token")
                 st.button("Join", on_click=lambda: self.on_join(game_name, game_token))
 

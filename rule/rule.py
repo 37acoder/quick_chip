@@ -1,12 +1,11 @@
 from abc import abstractmethod
-from datetime import datetime
+from dataclasses import dataclass
+import datetime
 from models.core import User, Game, UserGameInfo
 
 
 class Player:
-    def __init__(
-        self, user: User, user_game_info: UserGameInfo
-    ) -> None:
+    def __init__(self, user: User, user_game_info: UserGameInfo) -> None:
         self.user_model = user
         self.user_game_info_model = user_game_info
 
@@ -18,28 +17,18 @@ class Player:
     def deposit(self):
         return self.user_game_info_model.balance
 
-
-class Record:
-    def __init__(self, t: datetime = None) -> None:
-        self.time = t or datetime.now()
-
-    @abstractmethod
-    def content(self) -> str:
-        pass
-
-    def __str__(self) -> str:
-        return f"{self.time}: {self.content()}"
-
-
-class TransferRecord(Record):
-    def __init__(self, from_player: Player, to_player: Player, amount: int) -> None:
-        super().__init__()
-        self.from_player = from_player
-        self.to_player = to_player
-        self.amount = amount
-
-    def content(self) -> str:
-        return f"{self.from_player.name} pay {self.to_player.name} {self.amount}, balance {self.from_player.deposit}, {self.to_player.deposit}"
+    @staticmethod
+    def get_related_game_by_user_id(user_id: int):
+        # user_id related game in recent 1 day
+        return (
+            Game.select()
+            .join(UserGameInfo, on=(Game._id == UserGameInfo.game_id))
+            .where(
+                UserGameInfo.user_id == user_id
+                and (Game.created_at + datetime.timedelta(days=1))
+                > datetime.datetime.now()
+            )
+        )
 
 
 class GameBoard:
@@ -50,6 +39,7 @@ class GameBoard:
         user_ids = [info.user_id for info in user_game_infos]
         users = User.get_user_by_ids(user_ids)
         users_id_map = {user._id: user for user in users}
+        self.user_id_map = users_id_map
         self.players = [
             Player(users_id_map[info.user_id], info)
             for info in user_game_info_id_map.values()
@@ -58,18 +48,17 @@ class GameBoard:
         self.player_info_map_by_name = {
             player.name: player.user_game_info_model for player in self.players
         }
-        self.owner =  User.get_by_id(self.game_model.owner_id)
+        self.owner = User.get_by_id(self.game_model.owner_id)
         self.records = []
+        self.game_records = self.game_model.get_all_records()
+        self.god = Player(User.get_user_by_username("god"), UserGameInfo())
 
     @property
     def player_number(self) -> int:
         return len(self.players)
 
-    def add_record(self, record: Record) -> None:
-        self.records.append(record)
-
     def transfer(self, from_player: Player, to_player: Player, amount: int) -> None:
-        self.game_model.balance_trancefer(
+        self.game_model.balance_transfer(
             from_player.user_model._id, to_player.user_model._id, amount
         )
 
@@ -82,7 +71,9 @@ class GameBoard:
     ) -> Game:
         if Game.get_game_by_name(game_name) is not None:
             raise Exception(f"Game {game_name} already exist")
-        game = Game.create_game(game_name, owner_id, token, default_balance=default_balance)
+        game = Game.create_game(
+            game_name, owner_id, token, default_balance=default_balance
+        )
         return game
 
     @staticmethod
@@ -98,3 +89,6 @@ class GameBoard:
             raise Exception(f"Game {game_name} token not match")
         game.user_join_game(player_id)
         return game
+
+    def get_game_record(self):
+        return self.game_model.get_all_records()
